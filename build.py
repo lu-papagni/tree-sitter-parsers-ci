@@ -8,6 +8,7 @@ Discovers parser grammars in submodules, regenerates the C source with
 """
 
 import argparse
+import json
 import platform
 import subprocess
 import sys
@@ -29,16 +30,30 @@ def lib_ext() -> str:
     raise RuntimeError(f"Unsupported platform: {s}")
 
 
+def load_aliases(root: Path) -> dict[str, str]:
+    """Load parser name aliases from aliases.json if it exists."""
+    aliases_file = root / "aliases.json"
+    if aliases_file.exists():
+        with open(aliases_file) as f:
+            return json.load(f)
+    return {}
+
+
+# Populated once at startup from aliases.json
+_aliases: dict[str, str] = {}
+
+
 def language_name(parser_path: Path) -> str:
     """Return the language name for parser_path.
 
     Strips the conventional `tree-sitter-` prefix so the compiled library
-    is named after the language only.
+    is named after the language only, then applies any alias defined in
+    aliases.json.
     """
     name = parser_path.name
     if name.startswith("tree-sitter-"):
-        return name[len("tree-sitter-"):]
-    return name
+        name = name[len("tree-sitter-"):]
+    return _aliases.get(name, name)
 
 
 def _is_grammar(path: Path) -> bool:
@@ -158,7 +173,9 @@ def main() -> None:
     )
     args = ap.parse_args()
 
+    global _aliases
     root = Path(__file__).parent.resolve()
+    _aliases = load_aliases(root)
     output_dir = (root / args.output).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
