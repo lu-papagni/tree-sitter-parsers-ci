@@ -46,12 +46,15 @@ Each release contains one zip per platform:
 - `tree-sitter-parsers-linux-x64.zip`
 - `tree-sitter-parsers-windows-x64.zip`
 
-Inside each zip you'll find the compiled shared libraries:
+Inside each zip you'll find the compiled shared libraries, named after the
+language only (the `tree-sitter-` prefix is stripped):
 
 | Platform | File pattern |
 |----------|-------------|
-| Linux | `libtree-sitter-<name>.so` |
-| Windows | `tree-sitter-<name>.dll` |
+| Linux | `<name>.so` |
+| Windows | `<name>.dll` |
+
+For example, `parsers/tree-sitter-c` builds `c.so` / `c.dll`.
 
 ## Dependabot
 

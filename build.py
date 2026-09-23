@@ -29,8 +29,16 @@ def lib_ext() -> str:
     raise RuntimeError(f"Unsupported platform: {s}")
 
 
-def lib_prefix() -> str:
-    return "" if platform.system() == "Windows" else "lib"
+def language_name(parser_path: Path) -> str:
+    """Return the language name for parser_path.
+
+    Strips the conventional `tree-sitter-` prefix so the compiled library
+    is named after the language only.
+    """
+    name = parser_path.name
+    if name.startswith("tree-sitter-"):
+        return name[len("tree-sitter-"):]
+    return name
 
 
 def _is_grammar(path: Path) -> bool:
@@ -93,8 +101,8 @@ def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess[str]:
 # ---------------------------------------------------------------------------
 
 def build_parser(parser_path: Path, output_dir: Path, *, generate: bool) -> bool:
-    name = parser_path.name
-    output_file = output_dir / f"{lib_prefix()}{name}{lib_ext()}"
+    name = language_name(parser_path)
+    output_file = output_dir / f"{name}{lib_ext()}"
 
     print(f"\n{'=' * 60}")
     print(f"  {name}")
@@ -167,12 +175,12 @@ def main() -> None:
     print(f"Platform : {platform.system()} ({lib_ext()})")
     print(f"Output   : {output_dir}")
     print(f"Generate : {'yes' if gen else 'no'}")
-    print(f"Parsers  : {', '.join(g.name for g in grammars)}")
+    print(f"Parsers  : {', '.join(language_name(g) for g in grammars)}")
 
     ok: list[str] = []
     fail: list[str] = []
     for g in grammars:
-        (ok if build_parser(g, output_dir, generate=gen) else fail).append(g.name)
+        (ok if build_parser(g, output_dir, generate=gen) else fail).append(language_name(g))
 
     print(f"\n{'=' * 60}")
     print(f"  {len(ok)} succeeded, {len(fail)} failed")
