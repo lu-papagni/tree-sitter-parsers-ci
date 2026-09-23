@@ -1,0 +1,41 @@
+[submodule "parsers/tree-sitter-c"]
+	path = parsers/tree-sitter-c
+	url = https://github.com/tree-sitter/tree-sitter-c
+	shallow = true
+[submodule "parsers/tree-sitter-python"]
+	path = parsers/tree-sitter-python
+	url = https://github.com/tree-sitter/tree-sitter-python
+	shallow = true
+	branch = v0.23.6
+[submodule "parsers/tree-sitter-markdown"]
+	path = parsers/tree-sitter-markdown
+	url = https://github.com/tree-sitter-grammars/tree-sitter-markdown
+	shallow = true
+[submodule "parsers/tree-sitter-typescript"]
+	path = parsers/tree-sitter-typescript
+	url = https://github.com/tree-sitter/tree-sitter-typescript
+	shallow = true
+[submodule "parsers/tree-sitter-bash"]
+	path = parsers/tree-sitter-bash
+	url = https://github.com/tree-sitter/tree-sitter-bash
+	shallow = true
+[submodule "parsers/tree-sitter-go-template"]
+	path = parsers/tree-sitter-go-template
+	url = https://github.com/ngalaiko/tree-sitter-go-template
+	shallow = true
+[submodule "parsers/tree-sitter-javascript"]
+	path = parsers/tree-sitter-javascript
+	url = https://github.com/tree-sitter/tree-sitter-javascript
+	shallow = true
+[submodule "parsers/tree-sitter-yaml"]
+	path = parsers/tree-sitter-yaml
+	url = https://github.com/tree-sitter-grammars/tree-sitter-yaml
+	shallow = true
+[submodule "parsers/tree-sitter-lua"]
+	path = parsers/tree-sitter-lua
+	url = https://github.com/tree-sitter-grammars/tree-sitter-lua
+	shallow = true
+[submodule "parsers/tree-sitter-comment"]
+	path = parsers/tree-sitter-comment
+	url = https://github.com/stsewd/tree-sitter-comment
+	shallow = true
