@@ -22,12 +22,12 @@ The build script auto-discovers every submodule that contains a `grammar.js` or
 ## Local build
 
 ```bash
-# Prerequisites: tree-sitter-cli, node, a C compiler
-npm install -g tree-sitter-cli
+# Prerequisites: node (npx), python, a C compiler — no global install needed,
+# build.py runs the CLI via `npx -y tree-sitter-cli`
 
 python build.py            # builds all parsers into dist/
 python build.py -o out     # custom output directory
-python build.py --no-generate   # skip tree-sitter generate, use existing parser.c
+python build.py --no-generate   # skip generate, use existing parser.c
 python build.py parsers/tree-sitter-c   # build a single parser
 ```
 

@@ -3,7 +3,8 @@
 Build tree-sitter parsers from git submodules.
 
 Discovers parser grammars in submodules, regenerates the C source with
-`tree-sitter generate`, then compiles shared libraries with `tree-sitter build`.
+`npx tree-sitter-cli generate`, then compiles shared libraries with
+`npx tree-sitter-cli build` (no global install needed, just Node + npx).
 """
 
 import argparse
@@ -77,6 +78,11 @@ def discover_parsers(root: Path) -> list[Path]:
     return sorted(grammars)
 
 
+# Run the tree-sitter CLI via npx so no global install is required.
+# `-y` auto-accepts the install prompt on first use / in CI.
+TS_CLI: list[str] = ["npx", "-y", "tree-sitter-cli"]
+
+
 def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess[str]:
     print(f"  $ {' '.join(cmd)}")
     return subprocess.run(cmd, capture_output=True, text=True, **kwargs)
@@ -100,7 +106,7 @@ def build_parser(parser_path: Path, output_dir: Path, *, generate: bool) -> bool
     # Step 1 — (re)generate parser.c from grammar.js
     if generate and grammar_js.exists():
         print("  Generating parser.c ...")
-        r = run(["tree-sitter", "generate"], cwd=parser_path)
+        r = run([*TS_CLI, "generate"], cwd=parser_path)
         if r.returncode != 0:
             if parser_c.exists():
                 print("  ⚠ generate failed, falling back to existing parser.c")
@@ -112,7 +118,7 @@ def build_parser(parser_path: Path, output_dir: Path, *, generate: bool) -> bool
 
     # Step 2 — compile shared library
     print(f"  Compiling {output_file.name} ...")
-    r = run(["tree-sitter", "build", str(parser_path), "-o", str(output_file)])
+    r = run([*TS_CLI, "build", str(parser_path), "-o", str(output_file)])
     if r.returncode != 0:
         print(f"  ✗ build failed: {r.stderr.strip()}")
         return False
@@ -134,7 +140,7 @@ def main() -> None:
     )
     ap.add_argument(
         "--no-generate", action="store_true",
-        help="Skip `tree-sitter generate` — use pre-existing src/parser.c",
+        help="Skip `npx tree-sitter-cli generate` — use pre-existing src/parser.c",
     )
     ap.add_argument(
         "parsers", nargs="*",

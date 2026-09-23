@@ -36,9 +36,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install tree-sitter CLI
-        run: npm install -g tree-sitter-cli
-
       - name: Setup MSVC
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
