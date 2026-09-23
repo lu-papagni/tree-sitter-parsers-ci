@@ -119,22 +119,22 @@ def build_parser(parser_path: Path, output_dir: Path, *, generate: bool) -> bool
         r = run([*TS_CLI, "generate"], cwd=parser_path)
         if r.returncode != 0:
             if parser_c.exists():
-                print("  ⚠ generate failed, falling back to existing parser.c")
+                print("  [warn] generate failed, falling back to existing parser.c")
                 if r.stderr.strip():
                     print(f"    {r.stderr.strip()}")
             else:
-                print(f"  ✗ generate failed: {r.stderr.strip()}")
+                print(f"  [error] generate failed: {r.stderr.strip()}")
                 return False
 
     # Step 2 — compile shared library
     print(f"  Compiling {output_file.name} ...")
     r = run([*TS_CLI, "build", str(parser_path), "-o", str(output_file)])
     if r.returncode != 0:
-        print(f"  ✗ build failed: {r.stderr.strip()}")
+        print(f"  [error] build failed: {r.stderr.strip()}")
         return False
 
     kb = output_file.stat().st_size / 1024
-    print(f"  ✓ {output_file.name} ({kb:.0f} KB)")
+    print(f"  [ok] {output_file.name} ({kb:.0f} KB)")
     return True
 
 
@@ -187,9 +187,9 @@ def main() -> None:
     print(f"\n{'=' * 60}")
     print(f"  {len(ok)} succeeded, {len(fail)} failed")
     if ok:
-        print(f"  ✓ {', '.join(ok)}")
+        print(f"  [ok] {', '.join(ok)}")
     if fail:
-        print(f"  ✗ {', '.join(fail)}")
+        print(f"  [error] {', '.join(fail)}")
     print(f"{'=' * 60}")
 
     sys.exit(1 if fail else 0)
