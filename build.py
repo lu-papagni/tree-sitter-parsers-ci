@@ -93,7 +93,9 @@ TS_CLI: list[str] = ["npx", "-y", "tree-sitter-cli"]
 
 def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess[str]:
     print(f"  $ {' '.join(cmd)}")
-    return subprocess.run(cmd, capture_output=True, text=True, **kwargs)
+    # On Windows, npx is a .cmd script and needs shell=True to be found.
+    return subprocess.run(cmd, capture_output=True, text=True,
+                          shell=(platform.system() == "Windows"), **kwargs)
 
 
 # ---------------------------------------------------------------------------
