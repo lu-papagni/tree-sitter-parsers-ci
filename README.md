@@ -1,7 +1,7 @@
 # tree-sitter-parsers-ci
 
 Automated CI to compile [tree-sitter](https://tree-sitter.github.io/) parsers
-into shared libraries for **Linux** and **Windows**.
+into shared libraries for **Linux**, **Windows**, and **Android (Termux)**.
 
 Parsers are tracked as shallow git submodules under `parsers/`.
 [Dependabot](.github/dependabot.yml) proposes weekly updates (grouped into a
@@ -31,11 +31,29 @@ python build.py --no-generate   # skip generate, use existing parser.c
 python build.py parsers/tree-sitter-c   # build a single parser
 ```
 
+## Android (Termux)
+
+Termux cannot use the Linux `.so` files: it runs on Android's **Bionic libc**,
+while the Linux builds link against **glibc**
+(see [Differences from Linux](https://wiki.termux.dev/wiki/Differences_from_Linux)).
+The `android-aarch64` artifact is cross-compiled with the Android NDK
+(`aarch64-linux-android`, minSdk 29 = Android 10) and links
+against Bionic, so it loads in Termux (e.g. for Neovim's tree-sitter).
+
+To reproduce locally with the NDK installed:
+
+```bash
+export NDK=$ANDROID_NDK_HOME   # or wherever your NDK lives
+CC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang" \
+  python build.py -o dist-android
+file dist-android/*.so   # should report "ARM aarch64"
+```
+
 ## CI workflow
 
 | Trigger | What happens |
 |---------|-------------|
-| Push / PR | Build on Linux, macOS, Windows (validation) |
+| Push / PR | Build on Linux, Windows, Android (validation) |
 | Push to `main` | Build + create GitHub Release with platform zips |
 | `workflow_dispatch` | Same as push to main |
 
@@ -45,14 +63,16 @@ Each release contains one zip per platform:
 
 - `tree-sitter-parsers-linux-x64.zip`
 - `tree-sitter-parsers-windows-x64.zip`
+- `tree-sitter-parsers-android-aarch64.zip`
 
 Inside each zip you'll find the compiled shared libraries, named after the
 language only (the `tree-sitter-` prefix is stripped):
 
 | Platform | File pattern |
 |----------|-------------|
-| Linux | `<name>.so` |
+| Linux | `<name>.so` (glibc, x86-64) |
 | Windows | `<name>.dll` |
+| Android (Termux) | `<name>.so` (Bionic, ARM aarch64) |
 
 For example, `parsers/tree-sitter-c` builds `c.so` / `c.dll`.
 

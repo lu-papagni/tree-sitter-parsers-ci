@@ -5,6 +5,12 @@ Build tree-sitter parsers from git submodules.
 Discovers parser grammars in submodules, regenerates the C source with
 `npx tree-sitter-cli generate`, then compiles shared libraries with
 `npx tree-sitter-cli build` (no global install needed, just Node + npx).
+
+Cross-compiling (e.g. for Android/Termux) works via the standard CC env var:
+    CC="<ndk>/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang" \
+        python build.py -o dist-android
+which `tree-sitter build` honors. The output keeps the host extension
+(.so on Linux runners) but targets the Android ABI.
 """
 
 import argparse

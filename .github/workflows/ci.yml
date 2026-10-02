@@ -19,6 +19,13 @@ jobs:
             platform: linux-x64
           - os: windows-latest
             platform: windows-x64
+          # Android: cross-compiled on Ubuntu with the Android NDK.
+          # Parsers must be built with an Android-targeting clang triple.
+          # Target: arm64-v8a (aarch64)
+          - os: ubuntu-latest
+            platform: android-aarch64
+            android_target: aarch64-linux-android
+            android_api: 29
 
     runs-on: ${{ matrix.os }}
 
@@ -36,12 +43,37 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Setup Android NDK
+        if: matrix.platform == 'android-aarch64'
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27d
+
       - name: Setup MSVC
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
       - name: Build parsers
+        if: matrix.platform != 'android-aarch64'
         run: python build.py -o dist
+
+      # `tree-sitter build` honors the CC env var (incl. extra flags like
+      # --target), so pointing CC at the NDK clang cross-compiles the parsers.
+      # See https://developer.android.com/ndk/guides/other_build_systems
+      - name: Build parsers (Android)
+        if: matrix.platform == 'android-aarch64'
+        run: python build.py -o dist
+        env:
+          CC: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/${{ matrix.android_target }}${{ matrix.android_api }}-clang
+          CXX: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/${{ matrix.android_target }}${{ matrix.android_api }}-clang++
+          AR: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+
+      - name: Verify Android libraries
+        if: matrix.platform == 'android-aarch64'
+        run: |
+          file dist/*.so
+          file dist/*.so | grep -q "ARM aarch64" || (echo "Expected ARM aarch64 libraries" && exit 1)
 
       - uses: actions/upload-artifact@v4
         with:
