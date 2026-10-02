@@ -47,16 +47,18 @@ export NDK=$ANDROID_NDK_HOME   # or wherever your NDK lives
 export TARGET=aarch64-linux-android29
 CC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/$TARGET-clang" \
 CFLAGS="--target=$TARGET" CXXFLAGS="--target=$TARGET" \
-  python build.py -o dist-android
+  python build.py -o dist-android --direct
 file dist-android/*.so   # should report "ARM aarch64"
 ```
 
-> **Gotcha:** setting `CC` alone is *not* enough. `tree-sitter build`
-> compiles through the Rust `cc` crate with target/host pinned to the CLI's
-> own build triple (x86_64 Linux), so it appends `--target=x86_64-...`
-> after the NDK wrapper's `--target`, and clang honors the *last*
-> `--target`. Re-stating the Android `--target` in `CFLAGS`/`CXXFLAGS`
-> puts it last on the command line, restoring the Android target.
+> **Gotcha:** `--direct` is required for cross-compilation, and `CC`
+> alone changes nothing about the failure mode. `tree-sitter build`
+> compiles through the Rust `cc` crate (target pinned to the host, so it
+> appends `--target=x86_64-...` after the NDK wrapper's `--target` —
+> clang honors the *last* one) **and** unconditionally `dlopen`s its
+> output to verify it, which fails for foreign-arch libraries. `--direct`
+> drives `$CC` itself (with `--target` from `CFLAGS`/`CXXFLAGS`), avoiding
+> both problems.
 
 ## CI workflow
 

@@ -6,18 +6,26 @@ Discovers parser grammars in submodules, regenerates the C source with
 `npx tree-sitter-cli generate`, then compiles shared libraries with
 `npx tree-sitter-cli build` (no global install needed, just Node + npx).
 
-Cross-compiling (e.g. for Android/Termux) needs CC and CFLAGS/CXXFLAGS:
+Cross-compiling (e.g. for Android/Termux) uses --direct, which compiles
+with $CC/$CXX instead of `tree-sitter build`:
     TARGET=aarch64-linux-android29
-    CC="<ndk>/toolchains/llvm/prebuilt/linux-x86_64/bin/$TARGET-clang"
-    CFLAGS="--target=$TARGET" CXXFLAGS="--target=$TARGET"
-        python build.py -o dist-android
+    CC="<ndk>/toolchains/llvm/prebuilt/linux-x86_64/bin/$TARGET-clang" \
+    CFLAGS="--target=$TARGET" CXXFLAGS="--target=$TARGET" \
+        python build.py -o dist-android --direct
+--direct is required, not optional: `tree-sitter build` unconditionally
+dlopens its output to verify it, which fails for foreign-arch libraries.
+(CC/CFLAGS alone fix the target triple but not the dlopen.) The output
+keeps the host extension (.so on Linux runners) but targets the Android ABI.
 """
 
 import argparse
 import json
+import os
 import platform
+import shlex
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -123,7 +131,88 @@ def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess[str]:
 # Build
 # ---------------------------------------------------------------------------
 
-def build_parser(parser_path: Path, output_dir: Path, *, generate: bool) -> bool:
+
+def _split_env(name: str) -> list[str]:
+    """Split a flags-style env var (CC/CFLAGS/...) like a shell would."""
+    return shlex.split(os.environ.get(name, ""), posix=(os.name != "nt"))
+
+
+def direct_compile(parser_path: Path, output_file: Path) -> bool:
+    """Compile a parser with $CC/$CXX directly, bypassing `tree-sitter build`.
+
+    `tree-sitter build` unconditionally dlopens its output to verify it
+    (Loader::load_language_at_path_with_name -> Library::new), which fails
+    for cross-compiled foreign-arch libraries. Driving the compiler
+    ourselves avoids the load check, and also sidesteps the CLI pinning the
+    cc crate's target triple to the host (which needs the CFLAGS --target
+    counter-hack to undo).
+
+    Mirrors the CLI's own flags: -O2 -fPIC -shared -std=c11 (-std=c++17 for
+    C++ scanners), -Werror=implicit-function-declaration,
+    -Wl,--no-undefined. Extra flags come from $CFLAGS/$CXXFLAGS, which is
+    how --target reaches the cross-compiler here.
+    """
+    src = parser_path / "src"
+    parser_c = src / "parser.c"
+    if not parser_c.exists():
+        print(f"  [error] {parser_c} not found (generate first?)")
+        return False
+
+    c_sources = [parser_c]
+    scanner_c = src / "scanner.c"
+    if scanner_c.exists():
+        c_sources.append(scanner_c)
+    cxx_sources = [src / n for n in ("scanner.cc", "scanner.cpp", "scanner.cxx")
+                   if (src / n).exists()]
+
+    cc = _split_env("CC") or ["cc"]
+    cxx = _split_env("CXX") or ["c++"]
+
+    includes = [f"-I{src}"]
+    if not (src / "tree_sitter" / "parser.h").exists():
+        vendor = Path(__file__).parent.resolve() / "vendor"
+        if not (vendor / "tree_sitter" / "parser.h").exists():
+            print("  [error] no parser headers: src/tree_sitter/parser.h missing")
+            return False
+        print("  [warn] src/tree_sitter/parser.h missing, using vendored headers")
+        includes.append(f"-I{vendor}")
+
+    with tempfile.TemporaryDirectory(prefix="ts-direct-") as tmp:
+        objects: list[str] = []
+        for s in c_sources:
+            obj = str(Path(tmp) / f"{s.stem}.o")
+            cmd = (cc + _split_env("CFLAGS")
+                   + ["-c", "-O2", "-fPIC", "-std=c11",
+                      "-Werror=implicit-function-declaration"]
+                   + includes + [str(s), "-o", obj])
+            r = run(cmd)
+            if r.returncode != 0:
+                print(f"  [error] compile failed ({s.name}): {(r.stderr or r.stdout).strip()}")
+                return False
+            objects.append(obj)
+        for s in cxx_sources:
+            obj = str(Path(tmp) / f"{s.stem}.o")
+            cmd = (cxx + _split_env("CXXFLAGS")
+                   + ["-c", "-O2", "-fPIC", "-std=c++17"]
+                   + includes + [str(s), "-o", obj])
+            r = run(cmd)
+            if r.returncode != 0:
+                print(f"  [error] compile failed ({s.name}): {(r.stderr or r.stdout).strip()}")
+                return False
+            objects.append(obj)
+
+        link = (cxx if cxx_sources else cc)
+        cmd = (link + _split_env("CFLAGS") + _split_env("CXXFLAGS")
+               + ["-shared", "-Wl,--no-undefined"] + objects
+               + ["-o", str(output_file)])
+        r = run(cmd)
+        if r.returncode != 0:
+            print(f"  [error] link failed: {(r.stderr or r.stdout).strip()}")
+            return False
+    return True
+
+
+def build_parser(parser_path: Path, output_dir: Path, *, generate: bool, direct: bool = False) -> bool:
     name = language_name(parser_path)
     output_file = output_dir / f"{name}{lib_ext()}"
 
@@ -149,10 +238,14 @@ def build_parser(parser_path: Path, output_dir: Path, *, generate: bool) -> bool
 
     # Step 2 — compile shared library
     print(f"  Compiling {output_file.name} ...")
-    r = run([*TS_CLI, "build", str(parser_path), "-o", str(output_file)])
-    if r.returncode != 0:
-        print(f"  [error] build failed: {r.stderr.strip()}")
-        return False
+    if direct:
+        if not direct_compile(parser_path, output_file):
+            return False
+    else:
+        r = run([*TS_CLI, "build", str(parser_path), "-o", str(output_file)])
+        if r.returncode != 0:
+            print(f"  [error] build failed: {r.stderr.strip()}")
+            return False
 
     kb = output_file.stat().st_size / 1024
     print(f"  [ok] {output_file.name} ({kb:.0f} KB)")
@@ -172,6 +265,12 @@ def main() -> None:
     ap.add_argument(
         "--no-generate", action="store_true",
         help="Skip `npx tree-sitter-cli generate` — use pre-existing src/parser.c",
+    )
+    ap.add_argument(
+        "--direct", action="store_true",
+        help="Compile with $CC/$CXX directly instead of `tree-sitter build`. "
+             "Required for cross-compilation: the CLI dlopens its output, "
+             "which fails for foreign-arch libraries.",
     )
     ap.add_argument(
         "parsers", nargs="*",
@@ -200,12 +299,14 @@ def main() -> None:
     print(f"Platform : {platform.system()} ({lib_ext()})")
     print(f"Output   : {output_dir}")
     print(f"Generate : {'yes' if gen else 'no'}")
+    if args.direct:
+        print(f"Compiler : {os.environ.get('CC', 'cc')} (direct, no tree-sitter build)")
     print(f"Parsers  : {', '.join(language_name(g) for g in grammars)}")
 
     ok: list[str] = []
     fail: list[str] = []
     for g in grammars:
-        (ok if build_parser(g, output_dir, generate=gen) else fail).append(language_name(g))
+        (ok if build_parser(g, output_dir, generate=gen, direct=args.direct) else fail).append(language_name(g))
 
     print(f"\n{'=' * 60}")
     print(f"  {len(ok)} succeeded, {len(fail)} failed")

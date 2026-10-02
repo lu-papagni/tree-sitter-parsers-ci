@@ -58,17 +58,15 @@ jobs:
         if: matrix.platform != 'android-aarch64'
         run: python build.py -o dist
 
-      # `tree-sitter build` compiles via the Rust `cc` crate with target/host
-      # pinned to the CLI's own build triple (x86_64 Linux), so `cc` appends
-      # `--target=x86_64-...` after the NDK wrapper's own `--target`, and the
-      # later flag wins in clang -> host build. Env flags (CFLAGS/CXXFLAGS)
-      # are appended last by `cc`, so re-stating the Android `--target` there
-      # overrides it back. CC alone is not sufficient.
+      # Android is built with --direct (compile with $CC, bypassing
+      # `tree-sitter build`): the CLI unconditionally dlopens its output to
+      # verify it, which fails for foreign-arch libraries. $CFLAGS/$CXXFLAGS
+      # carry --target to the NDK clang.
       - name: Build parsers (Android)
         if: matrix.platform == 'android-aarch64'
         run: |
           "$CC" --version
-          python build.py -o dist
+          python build.py -o dist --direct
         env:
           CC: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/${{ matrix.android_target }}${{ matrix.android_api }}-clang
           CXX: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/${{ matrix.android_target }}${{ matrix.android_api }}-clang++
