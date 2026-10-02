@@ -44,10 +44,19 @@ To reproduce locally with the NDK installed:
 
 ```bash
 export NDK=$ANDROID_NDK_HOME   # or wherever your NDK lives
-CC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang" \
+export TARGET=aarch64-linux-android29
+CC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/$TARGET-clang" \
+CFLAGS="--target=$TARGET" CXXFLAGS="--target=$TARGET" \
   python build.py -o dist-android
 file dist-android/*.so   # should report "ARM aarch64"
 ```
+
+> **Gotcha:** setting `CC` alone is *not* enough. `tree-sitter build`
+> compiles through the Rust `cc` crate with target/host pinned to the CLI's
+> own build triple (x86_64 Linux), so it appends `--target=x86_64-...`
+> after the NDK wrapper's `--target`, and clang honors the *last*
+> `--target`. Re-stating the Android `--target` in `CFLAGS`/`CXXFLAGS`
+> puts it last on the command line, restoring the Android target.
 
 ## CI workflow
 
